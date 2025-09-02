@@ -10,6 +10,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 
+
 struct addrinfo* getAddrIP(const char* name, char** ip)
 {
 	struct addrinfo		hint;
@@ -19,8 +20,7 @@ struct addrinfo* getAddrIP(const char* name, char** ip)
 
 	ft_bzero(&hint, sizeof(struct addrinfo));
 	hint.ai_family = AF_INET;
-	hint.ai_socktype = SOCK_RAW;
-	hint.ai_protocol = IPPROTO_ICMP;
+	hint.ai_socktype = SOCK_DGRAM;
 	
 	status = getaddrinfo(name, 0, &hint, &res);
 	if (status != 0)
@@ -39,6 +39,8 @@ struct addrinfo* getAddrIP(const char* name, char** ip)
 	return res;
 }
 
+#define MAX_FD 10
+
 int main(void)
 {
 	char* ip;
@@ -49,9 +51,9 @@ int main(void)
 	ft_bzero(&addr, sizeof(struct sockaddr_in));
 
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = ;
-	addr.sin_port = 30000; // just a random port
-	//
+	addr.sin_port = htons(8008); // just a random port
+	inet_pton(AF_INET, ip, &addr.sin_addr);
+	printf("%s\n", ip);
 	
 	int socketfd = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
 	if (socketfd == -1)
@@ -59,6 +61,43 @@ int main(void)
 		dprintf(2, "%s", strerror(errno));
 		return 1;
 	}
+
+	// int ttl = 1;
+	// if (setsockopt(socketfd, IPPROTO_IP, IP_TTL, &ttl, sizeof(size_t)) != 0)
+	// {
+	// 	dprintf(2, "%s", strerror(errno));
+	// 	return -1;
+	// }
+
+	fd_set readfd;
+
+	struct timeval tv;
+	ft_bzero(&tv, sizeof(struct timeval));
+	tv.tv_sec = 5;
+
+	char* buffer = "hello :)";
+	while (1)
+	{
+		FD_ZERO(&readfd);
+		FD_SET(socketfd, &readfd);
+
+		int nb_send = sendto(socketfd, buffer, strlen(buffer), 0, (struct sockaddr*)&addr, sizeof(addr));
+		printf("%d\n", nb_send);
+
+		int nb = select(socketfd + 1, &readfd, NULL, NULL, &tv);
+		if (nb == -1) // error
+		{
+			dprintf(2, "select error: %s\n", strerror(errno));
+			exit(1);
+		}
+		if (nb == 0) // timeout
+		{
+			dprintf(2, "timeout\n");
+			continue;
+		}
+		printf("got something");
+	}
+
 	
 
 }
