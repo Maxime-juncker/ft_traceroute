@@ -53,3 +53,9 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+.vscode/
+int/
+ft_traceroute
+.cache/
+compile_commands.json
