@@ -95,7 +95,8 @@ t_packet process_packet(char* packet, size_t size)
 	struct icmp*	icmp = (struct icmp*)(packet + sizeof(struct iphdr));
 	(void)icmp;
 	
-	show_packet((unsigned char*)packet, size);
+	// show_packet((unsigned char*)packet, size);
+	(void)size;
 
     // struct in_addr source, dest;
 
@@ -125,7 +126,7 @@ int send_packet(t_infos* infos, t_packet* packet)
 	}
 
 	fd_set readfds;
-	struct timeval timeout = {3, 0};
+	struct timeval timeout = {0, 500000};
 	FD_ZERO(&readfds);
 	FD_SET(infos->recvfd, &readfds);
 
@@ -137,12 +138,13 @@ int send_packet(t_infos* infos, t_packet* packet)
 	}
 	if (ready == 0)
 	{
-		printf("timeout\n");
+		// printf("timeout\n");
 		return 1; // change to continue
 	}
 
 	socklen_t len = sizeof(infos->dest);
-	recvfrom(infos->recvfd, recv_buf, sizeof(recv_buf), 0, (struct sockaddr*)&infos->dest, &len);
+	struct sockaddr* addr = NULL;
+	recvfrom(infos->recvfd, recv_buf, sizeof(recv_buf), 0, addr, &len);
 	*packet = process_packet(recv_buf, sizeof(recv_buf));
 
 	return 0;
@@ -153,23 +155,23 @@ int find_path(t_infos* infos)
 	t_packet packet;
 	ft_bzero(&packet, sizeof(packet));
 
-	int i = 0;
 	int ttl = 1;
-		infos->dest.sin_port = htons(33435 + i);
-	while (packet.icmp.icmp_type == ICMP_TIME_EXCEEDED || i == 0)	
+		infos->dest.sin_port = htons(33435 + ttl);
+	while (packet.icmp.icmp_type == ICMP_TIME_EXCEEDED || ttl == 1)	
 	{
+		setsockopt(infos->sendfd, IPPROTO_IP, IP_TTL, &ttl, sizeof(int));
 
 		if (send_packet(infos, &packet) != 0)
 		{
-			exit(0);
+			printf("%d * * *\n", ttl);
+			ttl++;
+			continue;
 		}
 
 		struct in_addr tmp;
-		tmp.s_addr = packet.hdr.daddr;
-		printf("%d: %s (ttl:%d)\n", i, inet_ntoa(tmp), packet.icmp.icmp_type);
+		tmp.s_addr = packet.hdr.saddr;
+		printf("%d: %s (ttl:%d)\n", ttl, inet_ntoa(tmp), packet.icmp.icmp_type);
 		ttl++;
-		i++;
-		sleep(1);
 	}
 	return 0;
 }
@@ -187,7 +189,7 @@ int main(int argc, char* argv[])
 	char *ip;
 	getAddrIP(argv[1], &ip);
 
-	printf("ip: %s\n", ip);
+	printf("target ip: %s\n", ip);
 
 	int sendfd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sendfd == -1)
