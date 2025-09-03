@@ -20,6 +20,7 @@ struct addrinfo* getAddrIP(const char* name, char** ip)
 
 	ft_bzero(&hint, sizeof(struct addrinfo));
 	hint.ai_family = AF_INET;
+	hint.ai_protocol = IPPROTO_UDP;
 	hint.ai_socktype = SOCK_DGRAM;
 	
 	status = getaddrinfo(name, 0, &hint, &res);
@@ -39,65 +40,71 @@ struct addrinfo* getAddrIP(const char* name, char** ip)
 	return res;
 }
 
-#define MAX_FD 10
+#define ERROR(msg) dprintf(2, "ft_traceroute: %s: %s\n", msg, strerror(errno));
 
-int main(void)
+int main(int argc, char* argv[])
 {
-	char* ip;
-
-	struct addrinfo* info = getAddrIP("google.com", &ip);
-
-	struct sockaddr_in	addr;
-	ft_bzero(&addr, sizeof(struct sockaddr_in));
-
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(8008); // just a random port
-	inet_pton(AF_INET, ip, &addr.sin_addr);
-	printf("%s\n", ip);
-	
-	int socketfd = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
-	if (socketfd == -1)
+	if (argc < 2)
 	{
-		dprintf(2, "%s", strerror(errno));
+		printf("missing args\n");
 		return 1;
 	}
 
-	// int ttl = 1;
-	// if (setsockopt(socketfd, IPPROTO_IP, IP_TTL, &ttl, sizeof(size_t)) != 0)
-	// {
-	// 	dprintf(2, "%s", strerror(errno));
-	// 	return -1;
-	// }
+	char *ip;
+	getAddrIP(argv[1], &ip);
 
-	fd_set readfd;
+	printf("ip: %s\n", ip);
 
-	struct timeval tv;
-	ft_bzero(&tv, sizeof(struct timeval));
-	tv.tv_sec = 5;
-
-	char* buffer = "hello :)";
-	while (1)
+	int sendfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sendfd == -1)
 	{
-		FD_ZERO(&readfd);
-		FD_SET(socketfd, &readfd);
-
-		int nb_send = sendto(socketfd, buffer, strlen(buffer), 0, (struct sockaddr*)&addr, sizeof(addr));
-		printf("%d\n", nb_send);
-
-		int nb = select(socketfd + 1, &readfd, NULL, NULL, &tv);
-		if (nb == -1) // error
-		{
-			dprintf(2, "select error: %s\n", strerror(errno));
-			exit(1);
-		}
-		if (nb == 0) // timeout
-		{
-			dprintf(2, "timeout\n");
-			continue;
-		}
-		printf("got something");
+		ERROR("failed to create send socket");
+		return 1;
 	}
 
-	
+	int recvfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	if (recvfd == -1)
+	{
+		ERROR("failed to create recv socket");
+		close(sendfd);
+		return 1;
+	}
 
+	struct sockaddr_in	dest;
+	ft_bzero(&dest, sizeof(struct sockaddr_in));
+	dest.sin_family = AF_INET;
+	dest.sin_port = htons(33434);
+	if (inet_aton(ip, &dest.sin_addr) == 0)
+	{
+		ERROR("invalid address");
+		close(sendfd);
+		close(recvfd);
+		return 1;
+	}
+
+	char send_buf[42];
+	if (sendto(sendfd, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&dest, sizeof(dest)) < 0)
+	{
+		ERROR("failed to send packet");
+		// cleanup(...);
+		return 1;
+	}
+
+	fd_set readfds;
+	struct timeval timeout = {3, 0};
+	FD_ZERO(&readfds);
+	FD_SET(recvfd, &readfds);
+
+	int ready = select(recvfd + 1, &readfds, NULL, NULL, &timeout);
+	if (ready == -1)
+	{
+		ERROR("select failed");
+		return 1;
+	}
+	if (ready == 0)
+	{
+		printf("timeout\n");
+		return 1; // change to continue
+	}
+	printf("%d\n", ready);
 }
