@@ -17,6 +17,11 @@ VPATH = srcs
 
 SRCS =	main.c			\
 		options.c		\
+		ft_traceroute.c	\
+		utils.c			\
+		packet.c		\
+		socket.c		\
+
 
 OBJS = $(addprefix $(OBJ_DIR)/, $(SRCS:.c=.o))
 DEPS = $(OBJS:.o=.d)
