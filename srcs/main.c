@@ -1,9 +1,9 @@
 #include "libft/memory.h"
 #include "libft/string.h"
 #include "libft/is.h"
+#include "ft_traceroute.h"
 #include "options.h"
 
-#include <errno.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -12,50 +12,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
-#include <netinet/ip.h>
-#include <netinet/ip_icmp.h>
 
 #include <sys/time.h>
-
-#define ERROR(msg) dprintf(2, "ft_traceroute: %s: %s\n", msg, strerror(errno));
-
-typedef struct s_packet
-{
-	struct icmp		icmp;
-	struct iphdr	hdr;
-
-	char*	payload;
-
-} t_packet;
-
-typedef struct s_settings
-{
-	char*	target;
-	size_t	max_hops;
-	size_t	packet_size;
-	size_t	nqueries;
-
-	size_t	port;
-
-} t_settings;
-
-typedef struct s_connection_info
-{
-	int sendfd;
-	int	recvfd;
-
-	t_settings	settings;
-	t_packet*	packets;
-
-	struct sockaddr_in dest;
-} t_infos;
 
 struct addrinfo* getAddrIP(const char* name, char** ip)
 {
 	struct addrinfo		hint;
 	struct addrinfo*	res;
 	int					status;
-	char				buffer[INET_ADDRSTRLEN];
 
 	ft_bzero(&hint, sizeof(struct addrinfo));
 	hint.ai_family = AF_INET;
@@ -72,8 +36,7 @@ struct addrinfo* getAddrIP(const char* name, char** ip)
 	if (res->ai_family == AF_INET)
 	{
 		struct sockaddr_in* ip4 = (struct sockaddr_in*)res->ai_addr;
-		inet_ntop(res->ai_family, &(ip4->sin_addr), buffer, sizeof(buffer));
-		*ip = strdup(buffer);
+		*ip = inet_ntoa(ip4->sin_addr);
 	}
 
 	return res;
@@ -136,7 +99,7 @@ int send_packet(t_infos* infos, t_packet* packet)
 	}
 
 	fd_set readfds;
-	struct timeval timeout = {0, 500000};
+	struct timeval timeout = {0, 50000};
 	FD_ZERO(&readfds);
 	FD_SET(infos->recvfd, &readfds);
 
@@ -323,7 +286,7 @@ int main(int argc, char* argv[])
 	struct sockaddr_in	dest;
 	ft_bzero(&dest, sizeof(struct sockaddr_in));
 	dest.sin_family = AF_INET;
-	if (inet_aton(ip, &dest.sin_addr) == 0)
+	if (inet_pton(AF_INET, ip, &dest.sin_addr) == 0) // TODO: aton forbidden
 	{
 		ERROR("invalid address");
 		close(sendfd);

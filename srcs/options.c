@@ -4,6 +4,8 @@
 
 #include "options.h"
 #include "text.h"
+#include "libft/memory.h"
+#include "libft/string.h"
 
 t_option*	load_short_option(t_option* options, char c)
 {
@@ -23,7 +25,7 @@ t_option* load_large_option(t_option* options, char* name)
 
 	while (options[i].id != NONE)
 	{
-		if (strcmp(options[i].name, name) == 0)
+		if (ft_strcmp(options[i].name, name) == 0)
 			return &options[i];
 		i++;
 	}
@@ -44,7 +46,7 @@ int set_value(t_option* option, char* argv[], int* idx, int argc)
 			option->data = argv[*idx];
 		else
 		{
-			option->data = (void*)strtol(argv[*idx], &end, option->type == HEX ? 16 : 10);
+			option->data = (void*)ft_strtol(argv[*idx], &end, option->type == HEX ? 16 : 10);
 			if (end[0] != '\0')
 				return E_INVALID;
 		}
@@ -178,7 +180,7 @@ t_option* parse_options(int argc, char* argv[])
 	t_option* cpy = malloc(sizeof(options));
 	if (cpy == NULL)
 		return NULL;
-	memcpy(cpy, &options, sizeof(options));
+	ft_memcpy(cpy, &options, sizeof(options));
 	return cpy;
 }
 

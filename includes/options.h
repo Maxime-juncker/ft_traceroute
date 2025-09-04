@@ -4,10 +4,6 @@
 #define E_UNKNOW -1
 #define E_INVALID -2
 
-// TODO: ttl marche pas
-// TODO: ip timestamp marche pas
-//
-
 typedef enum e_option_type
 {
 	UNKNOW = -1,
