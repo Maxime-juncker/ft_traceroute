@@ -135,26 +135,16 @@ t_option* parse_options(int argc, char* argv[])
 {
 	t_option		options[] =
 	{
-		{HELP,				'?',	"help",				0, (void*)0x0,	INT },
-		{VERBOSE,			'v',	"verbose",			0, (void*)0x0,	INT },
-		{FLOOD,				'f',	"flood",			0, (void*)0x0,	INT },
-		{IP_TIMESTAMP,		'\0',	"ip-timestamp",		1, (void*)0x0,	STRING },
-		{PRELOAD,			'l',	"preload",			1, (void*)0x0,	INT },
-		{NUMERIC,			'n',	"numeric",			0, (void*)0x0,	INT },
-		{TIMEOUT,			'w',	"timeout",			1, (void*)0x0,	INT },
-		{LINGER,			'W',	"linger",			1, (void*)0x0,	INT },
-		{PATTERN,			'p',	"pattern",			1, (void*)0x0,	HEX },
-		{IGNORE_ROUTING,	'r',	"ignore-routine",	0, (void*)0x0,	INT },
-		{SIZE,				's',	"size",				1, (void*)56,	INT },
-		{TOS,				'T',	"tos",				1, (void*)0x0,	INT },
-		{QUIET,				'q',	"quiet",			0, (void*)0x0,	INT },
-		{VERSION,			'V',	"version",			0, (void*)0x0,	INT },
-		{USAGE,				'\0',	"usage",			0, (void*)0x0,	INT },
-		{DEBUG,				'd',	"debug",			0, (void*)0x0,	INT },
-		{INTERVAL,			'i',	"interval",			1, (void*)0x1,	INT },
-		{TTL,				'\0',	"ttl",				1, (void*)64,	INT },
-		{NAME,				'\0',	"",					0, (void*)0x0,	STRING },
-		{NONE,				'\0',	"",					0, (void*)0x0,	INT },
+		{HELP,				'?',	"help",				0, (void*)0x0,		INT },
+		{NUMERIC,			'n',	"numeric",			0, (void*)0x0,		INT },
+		{SIZE,				's',	"size",				1, (void*)56,		INT },
+		{USAGE,				'\0',	"usage",			0, (void*)0x0,		INT },
+		{NQUERIES,			'q',	"queries",			1, (void*)0x3,		INT },
+		{MAX_TTL,			'm',	"max_ttl",			1, (void*)0x1E,		INT },
+		{PORT,				'p',	"port",				1, (void*)33434,	INT },
+		{DEBUG,				'd',	"debug",			0, (void*)0x0,		INT },
+		{NAME,				'\0',	"",					0, (void*)0x0,		STRING },
+		{NONE,				'\0',	"",					0, (void*)0x0,		INT },
 	};
 
 	for (int i = 1; i < argc; i++)
@@ -175,8 +165,7 @@ t_option* parse_options(int argc, char* argv[])
 	}
 
 	if (argv[argc-1][0] == '-' &&
-	 !(get_option(options, VERSION)->data ||
-		get_option(options, HELP)->data ||
+	 !(	get_option(options, HELP)->data ||
 		get_option(options, USAGE)->data))
 	{
 		dprintf(2, "ft_ping: missing host operand\n");

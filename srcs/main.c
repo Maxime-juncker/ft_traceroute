@@ -1,5 +1,7 @@
 #include "libft/memory.h"
+#include "libft/string.h"
 #include "libft/is.h"
+#include "options.h"
 
 #include <errno.h>
 #include <sys/select.h>
@@ -13,6 +15,8 @@
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 
+#include <sys/time.h>
+
 #define ERROR(msg) dprintf(2, "ft_traceroute: %s: %s\n", msg, strerror(errno));
 
 typedef struct s_packet
@@ -24,10 +28,24 @@ typedef struct s_packet
 
 } t_packet;
 
+typedef struct s_settings
+{
+	char*	target;
+	size_t	max_hops;
+	size_t	packet_size;
+	size_t	nqueries;
+
+	size_t	port;
+
+} t_settings;
+
 typedef struct s_connection_info
 {
 	int sendfd;
 	int	recvfd;
+
+	t_settings	settings;
+	t_packet*	packets;
 
 	struct sockaddr_in dest;
 } t_infos;
@@ -98,14 +116,6 @@ t_packet process_packet(char* packet, size_t size)
 	// show_packet((unsigned char*)packet, size);
 	(void)size;
 
-    // struct in_addr source, dest;
-
-    // source.s_addr = hdr->saddr;
-    // dest.s_addr = hdr->daddr;
-
-    // printf("Source IP: %s\n", inet_ntoa(source));
-    // printf("Destination IP: %s\n", inet_ntoa(dest));
-    //
 	return (t_packet) {
 		.icmp = *icmp,
 		.hdr = *hdr,
@@ -137,10 +147,7 @@ int send_packet(t_infos* infos, t_packet* packet)
 		return 1;
 	}
 	if (ready == 0)
-	{
-		// printf("timeout\n");
-		return 1; // change to continue
-	}
+		return 1;
 
 	socklen_t len = sizeof(infos->dest);
 	struct sockaddr* addr = NULL;
@@ -150,32 +157,123 @@ int send_packet(t_infos* infos, t_packet* packet)
 	return 0;
 }
 
-int find_path(t_infos* infos)
+char* iptoa(const char* ip)
 {
-	t_packet packet;
-	ft_bzero(&packet, sizeof(packet));
+	struct sockaddr_in	sa;
+	socklen_t			len;
+	char				hbuf[1024]; // Max 10 result;
+	bzero(&sa, sizeof(struct sockaddr_in));
 
-	int ttl = 1;
-		infos->dest.sin_port = htons(33435 + ttl);
-	while (packet.icmp.icmp_type == ICMP_TIME_EXCEEDED || ttl == 1)	
+	sa.sin_family = AF_INET;
+	sa.sin_addr.s_addr = inet_addr(ip);
+	len = sizeof(struct sockaddr_in);
+
+	if (getnameinfo((struct sockaddr*)&sa, len, hbuf, sizeof(hbuf), NULL, 0, NI_DGRAM) != 0)
 	{
-		setsockopt(infos->sendfd, IPPROTO_IP, IP_TTL, &ttl, sizeof(int));
+		ERROR("could not resolve host");
+		return NULL;
+	}
+	return ft_strdup(hbuf);
+}
 
-		if (send_packet(infos, &packet) != 0)
+long gettime()
+{
+	struct timeval	tv;
+
+	gettimeofday(&tv, NULL);
+	return (tv.tv_sec * 1000000 + tv.tv_usec);
+}
+
+void print_res(t_infos* infos, int idx, float time)
+{
+	struct in_addr tmp;
+
+	tmp.s_addr = infos->packets[idx].hdr.saddr;
+	char*	ip = inet_ntoa(tmp);
+
+	int i = 0;
+	for ( ; i < idx; i++)
+	{
+		if (infos->packets[i].hdr.saddr == infos->packets[idx].hdr.saddr)
+			break;
+	}
+	if (i == idx) // packet is new
+		printf("%s (%s) ", iptoa(ip), ip);
+	printf("%.3fms ", time);
+}
+
+int do_probe(t_infos* infos, int *port)
+{
+	int retval = 0;
+	int before, after;
+	float time;
+
+	for (size_t i = 0; i < infos->settings.nqueries; i++)
+	{
+		before = gettime();
+
+		infos->dest.sin_port = htons(*port);
+		if (send_packet(infos, &infos->packets[i]) != 0)
 		{
-			printf("%d * * *\n", ttl);
-			ttl++;
+			printf("* ");
 			continue;
 		}
+		after = gettime();
+		time = ((float)after - before) / 1000;
 
-		struct in_addr tmp;
-		tmp.s_addr = packet.hdr.saddr;
-		printf("%d: %s (ttl:%d)\n", ttl, inet_ntoa(tmp), packet.icmp.icmp_type);
+		print_res(infos, i, time);
+		*port += 1;
+		if (infos->packets[i].icmp.icmp_type != ICMP_TIME_EXCEEDED)
+			retval = 2;
+	}
+	return retval;
+}
+
+int find_path(t_infos* infos)
+{
+	size_t	ttl = 1;
+	int		stop = 0;
+	int port = infos->settings.port;
+	while ((stop == 0 || ttl == 1)
+				&& ttl <= infos->settings.max_hops)	
+	{
+		printf(" %ld  ", ttl);
+
+		setsockopt(infos->sendfd, IPPROTO_IP, IP_TTL, &ttl, sizeof(int));
+		int retval = do_probe(infos, &port);
+		if (retval == 1)
+		{
+			ttl++;
+			port++;
+			continue;
+		}
+		if (retval == 2)
+			stop = 1;
+		printf("\n");
 		ttl++;
 	}
 	return 0;
 }
 
+t_settings create_settings(t_option* options)
+{
+	t_settings settings = {
+		.max_hops		= (long)get_option(options, MAX_TTL)->data,
+		.nqueries		= (long)get_option(options, NQUERIES)->data,
+		.packet_size	= (long)get_option(options, SIZE)->data,
+		.port			= (long)get_option(options, PORT)->data,
+		.target			= get_option(options, NAME)->data,
+	};
+	free(options);
+
+	if (settings.nqueries > 10)
+	{
+		dprintf(2, "no more than 10 probes per hop\n");
+		exit(1);
+	}
+
+	return settings;
+}
 
 int main(int argc, char* argv[])
 {
@@ -185,11 +283,20 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	t_infos infos;
+	infos.settings = create_settings(parse_options(argc, argv));	
+	infos.packets = ft_calloc(infos.settings.nqueries, sizeof(t_packet));
+	if (!infos.packets)
+	{
+		exit(1);
+	}
+	
 
 	char *ip;
-	getAddrIP(argv[1], &ip);
+	getAddrIP(infos.settings.target, &ip);
 
-	printf("target ip: %s\n", ip);
+	printf("traceroute to %s, %ld hops max, %ld byte packets\n",
+		ip, infos.settings.max_hops, infos.settings.packet_size);
 
 	int sendfd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sendfd == -1)
@@ -224,7 +331,6 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	t_infos infos;
 	infos.recvfd = recvfd;
 	infos.sendfd = sendfd;
 	infos.dest = dest;
